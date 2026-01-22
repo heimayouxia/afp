@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Air Quality Forecast</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8fafc;
+      margin: 0;
+      padding: 20px;
+      color: #1e293b;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      padding: 24px;
+    }
+    h1 {
+      text-align: center;
+      color: #0f172a;
+      margin-bottom: 24px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #3b82f6;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    button:hover {
+      background-color: #2563eb;
+    }
+    button:disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 8px;
+      background-color: #f1f5f9;
+      display: none;
+    }
+    .result.show {
+      display: block;
+    }
+    .aqi-value {
+      font-size: 2em;
+      font-weight: bold;
+      color: #0f172a;
+    }
+    .aqi-level {
+      font-size: 1.2em;
+      margin-top: 8px;
+    }
+    .image-container {
+      margin-top: 16px;
+      text-align: center;
+    }
+    .image-container img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .error {
+      color: #ef4444;
+      margin-top: 12px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌍 City Air Quality Forecast</h1>
+
+    <div class="form-group">
+      <label for="city">City</label>
+      <input type="text" id="city" placeholder="e.g., Los Angeles" value="Los Angeles" />
+    </div>
+
+    <div class="form-group">
+      <label for="date">Date (YYYY-MM-DD)</label>
+      <input type="text" id="date" placeholder="e.g., 2026-01-21" value="2026-01-21" />
+    </div>
+
+    <button id="predictBtn" onclick="predict()">Get Forecast</button>
+
+    <div id="error" class="error"></div>
+
+    <div id="result" class="result">
+      <div><strong>City:</strong> <span id="res-city"></span></div>
+      <div><strong>Date:</strong> <span id="res-date"></span></div>
+      <div class="aqi-value">AQI: <span id="res-aqi"></span></div>
+      <div class="aqi-level">Level: <span id="res-level"></span></div>
+      
+      <div class="image-container">
+        <img id="city-image" alt="City view" />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function predict() {
+      const city = document.getElementById('city').value.trim();
+      const date = document.getElementById('date').value.trim();
+      const errorEl = document.getElementById('error');
+      const resultEl = document.getElementById('result');
+
+      errorEl.textContent = '';
+      resultEl.classList.remove('show');
+
+      if (!city || !date) {
+        errorEl.textContent = 'Please enter both city and date.';
+        return;
+      }
+
+      // 检查日期格式 YYYY-MM-DD
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(date)) {
+        errorEl.textContent = 'Date must be in YYYY-MM-DD format.';
+        return;
+      }
+
+      try {
+        const response = await fetch('http://localhost:8000/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ city, date })
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.detail || 'Prediction failed');
+        }
+
+        const data = await response.json();
+
+        // 更新结果
+        document.getElementById('res-city').textContent = data.city;
+        document.getElementById('res-date').textContent = data.date;
+        document.getElementById('res-aqi').textContent = data.predicted_aqi;
+        document.getElementById('res-level').textContent = data.aqi_level;
+
+        // 构造图片路径（与 genai.py 一致）
+        const safeCity = data.city.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        const imgPath = `images/${safeCity}_aqi_${Math.round(data.predicted_aqi)}.png`;
+        document.getElementById('city-image').src = imgPath + '?' + Date.now(); // 防止缓存
+
+        resultEl.classList.add('show');
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = 'Error: ' + (err.message || 'Failed to get prediction');
+      }
+    }
+
+    // 支持回车提交
+    document.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') predict();
+    });
+  </script>
+</body>
+</html>
